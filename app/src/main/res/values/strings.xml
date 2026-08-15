@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DeepSeek Harness</string>
+    <string name="settings_title">设置</string>
+    <string name="loading">正在启动服务...</string>
+    <string name="retry">重试</string>
+    <string name="error_start_failed">服务启动失败</string>
+    <string name="error_timeout">启动超时</string>
+    <string name="notification_channel_name">DSH 服务</string>
+    <string name="notification_channel_desc">DeepSeek Harness 后台服务</string>
+    <string name="notification_running">DSH 服务运行中</string>
+    <string name="notification_starting">正在启动服务...</string>
+</resources>
