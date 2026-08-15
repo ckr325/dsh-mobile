@@ -104,10 +104,17 @@ public class ProotRuntime {
 
         copyAsset(prootAsset, prootBinary);
 
-        // 设置可执行权限
-        Runtime.getRuntime().exec("chmod 755 " + prootBinary.getAbsolutePath());
+        // 设置可执行权限（同步等待完成）
+        try {
+            Process chmod = Runtime.getRuntime().exec(new String[]{"chmod", "755", prootBinary.getAbsolutePath()});
+            chmod.waitFor();
+        } catch (Exception e) {
+            Log.e(TAG, "chmod 失败", e);
+        }
         prootBinary.setExecutable(true, false);
+        prootBinary.setReadable(true, false);
 
+        log("proot 权限: 可执行=" + prootBinary.canExecute() + ", 大小=" + prootBinary.length());
         log("proot 初始化完成 ✓");
     }
 
