@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>DeepSeek Harness</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 侧边栏 -->
+        <div id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h2>DeepSeek Harness</h2>
+                <button id="newChatBtn" class="btn-new-chat">
+                    <i class="fas fa-plus"></i> 新对话
+                </button>
+            </div>
+            <div id="conversationList" class="conversation-list">
+                <!-- 对话列表将在这里动态生成 -->
+            </div>
+            <div class="sidebar-footer">
+                <button id="settingsBtn" class="btn-settings">
+                    <i class="fas fa-cog"></i> 设置
+                </button>
+            </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div id="mainContent" class="main-content">
+            <!-- 欢迎页面 -->
+            <div id="welcomeScreen" class="welcome-screen">
+                <div class="welcome-content">
+                    <div class="logo">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <h1>DeepSeek Harness</h1>
+                    <p>您的 AI 智能助手</p>
+                    <div class="feature-list">
+                        <div class="feature-item">
+                            <i class="fas fa-comments"></i>
+                            <span>智能对话</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-code"></i>
+                            <span>代码助手</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-lightbulb"></i>
+                            <span>创意写作</span>
+                        </div>
+                    </div>
+                    <button id="startBtn" class="btn-start">开始对话</button>
+                </div>
+            </div>
+
+            <!-- 对话界面 -->
+            <div id="chatScreen" class="chat-screen" style="display: none;">
+                <div class="chat-header">
+                    <button id="menuBtn" class="btn-menu">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h3 id="chatTitle">新对话</h3>
+                    <button id="clearBtn" class="btn-clear">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <div id="messageList" class="message-list">
+                    <!-- 消息将在这里动态生成 -->
+                </div>
+                <div class="input-area">
+                    <div class="input-wrapper">
+                        <textarea id="messageInput" placeholder="输入您的问题..." rows="1"></textarea>
+                        <button id="sendBtn" class="btn-send">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div class="input-footer">
+                        <span class="char-count">0/2000</span>
+                        <span class="input-hint">按 Enter 发送，Shift+Enter 换行</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设置面板 -->
+        <div id="settingsPanel" class="settings-panel" style="display: none;">
+            <div class="settings-content">
+                <div class="settings-header">
+                    <h2>设置</h2>
+                    <button id="closeSettings" class="btn-close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="settings-body">
+                    <div class="setting-item">
+                        <label>API Key</label>
+                        <input type="password" id="apiKeyInput" placeholder="输入 DeepSeek API Key">
+                    </div>
+                    <div class="setting-item">
+                        <label>模型</label>
+                        <select id="modelSelect">
+                            <option value="deepseek-chat">DeepSeek Chat</option>
+                            <option value="deepseek-coder">DeepSeek Coder</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <label>温度 (Temperature): <span id="tempValue">0.7</span></label>
+                        <input type="range" id="tempSlider" min="0" max="1" step="0.1" value="0.7">
+                    </div>
+                    <div class="setting-item">
+                        <label>最大 Tokens: <span id="tokensValue">2048</span></label>
+                        <input type="range" id="tokensSlider" min="256" max="4096" step="256" value="2048">
+                    </div>
+                    <button id="saveSettings" class="btn-save">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
