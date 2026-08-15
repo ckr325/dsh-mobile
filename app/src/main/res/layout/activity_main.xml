@@ -104,7 +104,16 @@
                 android:id="@+id/step4"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="○ 启动 DSH 服务器"
+                android:text="○ 部署服务器"
+                android:textSize="13sp"
+                android:textColor="@color/text_hint"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:id="@+id/step5"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="○ 启动 DSH 服务"
                 android:textSize="13sp"
                 android:textColor="@color/text_hint" />
 
