@@ -28,28 +28,26 @@ public class EnvironmentDownloader {
 
     private static final String TAG = "EnvDownloader";
 
-    // proot 下载地址（arm64）
+    // proot 下载地址 - 使用 Termux 的 fork（对 Android 兼容性更好）
+    // 包含 link2symlink 补丁，解决了 Android 不支持硬链接的问题
     private static final String PROOT_URL_AARCH64 =
-        "https://github.com/proot-me/proot/releases/download/v5.4.0/proot-v5.4.0-aarch64-static";
+        "https://github.com/termux/proot/releases/download/v5.4.0-termux-r2/proot-v5.4.0-termux-r2-aarch64-static";
 
-    // proot 下载地址（arm）
     private static final String PROOT_URL_ARM =
-        "https://github.com/proot-me/proot/releases/download/v5.4.0/proot-v5.4.0-arm-static";
+        "https://github.com/termux/proot/releases/download/v5.4.0-termux-r2/proot-v5.4.0-termux-r2-arm-static";
 
-    // proot 下载地址（x86_64）
     private static final String PROOT_URL_X86_64 =
-        "https://github.com/proot-me/proot/releases/download/v5.4.0/proot-v5.4.0-x86_64-static";
+        "https://github.com/termux/proot/releases/download/v5.4.0-termux-r2/proot-v5.4.0-termux-r2-x86_64-static";
 
     // Ubuntu 最小 rootfs（arm64）- 来自 Ubuntu CDIMAGE
-    // 使用 ubuntu-base 是最小的 Ubuntu 根文件系统
     private static final String ROOTFS_URL_AARCH64 =
-        "https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04.3-base-arm64.tar.gz";
+        "https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-arm64.tar.gz";
 
     private static final String ROOTFS_URL_X86_64 =
-        "https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04.3-base-amd64.tar.gz";
+        "https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-amd64.tar.gz";
 
     private static final String ROOTFS_URL_ARMHF =
-        "https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04.3-base-armhf.tar.gz";
+        "https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-armhf.tar.gz";
 
     public interface DownloadCallback {
         void onStatusUpdate(String status);
