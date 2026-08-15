@@ -28,16 +28,15 @@ public class EnvironmentDownloader {
 
     private static final String TAG = "EnvDownloader";
 
-    // proot 下载地址 - 使用 Termux 的 fork（对 Android 兼容性更好）
-    // 包含 link2symlink 补丁，解决了 Android 不支持硬链接的问题
+    // proot 下载地址 - 来自 proot-me 官方 releases
     private static final String PROOT_URL_AARCH64 =
-        "https://github.com/termux/proot/releases/download/v5.4.0-termux-r2/proot-v5.4.0-termux-r2-aarch64-static";
+        "https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-aarch64-static";
 
     private static final String PROOT_URL_ARM =
-        "https://github.com/termux/proot/releases/download/v5.4.0-termux-r2/proot-v5.4.0-termux-r2-arm-static";
+        "https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-arm-static";
 
     private static final String PROOT_URL_X86_64 =
-        "https://github.com/termux/proot/releases/download/v5.4.0-termux-r2/proot-v5.4.0-termux-r2-x86_64-static";
+        "https://github.com/proot-me/proot/releases/download/v5.3.0/proot-v5.3.0-x86_64-static";
 
     // Ubuntu 最小 rootfs（arm64）- 来自 Ubuntu CDIMAGE
     private static final String ROOTFS_URL_AARCH64 =
