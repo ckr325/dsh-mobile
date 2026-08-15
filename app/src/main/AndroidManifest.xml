@@ -39,11 +39,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Termux 集成：声明可发送命令给 Termux -->
-        <queries>
-            <package android:name="com.termux" />
-        </queries>
-
     </application>
+
+    <!-- Termux 集成：声明可发送命令给 Termux -->
+    <queries>
+        <package android:name="com.termux" />
+    </queries>
 
 </manifest>
