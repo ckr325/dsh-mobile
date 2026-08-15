@@ -1,0 +1,24 @@
+{
+  "name": "dsh-mobile-server",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness Mobile Server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js --dev"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.3.1",
+    "marked": "^9.1.2",
+    "highlight.js": "^11.9.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": ["deepseek", "harness", "ai", "mobile"],
+  "license": "MIT"
+}
