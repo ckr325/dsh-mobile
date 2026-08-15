@@ -176,9 +176,38 @@ public class EnvironmentDownloader {
     }
 
     /**
-     * 下载文件并报告进度
+     * 下载文件并报告进度（带重试）
      */
     private void downloadFile(String urlStr, File dest) throws IOException {
+        int maxRetries = 3;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                notifyStatus("尝试下载 (第" + attempt + "次)...");
+                Log.d(TAG, "下载: " + urlStr + " (尝试 " + attempt + ")");
+
+                downloadFileOnce(urlStr, dest);
+                notifyStatus("下载完成 ✓ (" + (dest.length() / 1024) + "KB)");
+                return;
+
+            } catch (IOException e) {
+                Log.e(TAG, "下载失败 (尝试 " + attempt + "): " + e.getMessage());
+                notifyStatus("下载失败: " + e.getMessage());
+
+                if (attempt >= maxRetries) {
+                    throw new IOException("下载失败（已重试" + maxRetries + "次）: " + e.getMessage(), e);
+                }
+
+                // 等待后重试
+                try {
+                    notifyStatus("等待 3 秒后重试...");
+                    Thread.sleep(3000);
+                } catch (InterruptedException ignored) {}
+            }
+        }
+    }
+
+    private void downloadFileOnce(String urlStr, File dest) throws IOException {
         HttpURLConnection conn = null;
         InputStream is = null;
         FileOutputStream os = null;
@@ -188,29 +217,42 @@ public class EnvironmentDownloader {
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(30000);
-            conn.setReadTimeout(60000);
+            conn.setReadTimeout(120000); // 读取超时 2 分钟
             conn.setInstanceFollowRedirects(true);
-            conn.setRequestProperty("User-Agent", "DSH-Mobile/1.0");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36");
+
+            int code = conn.getResponseCode();
+            Log.d(TAG, "HTTP 响应码: " + code);
+            notifyStatus("HTTP " + code + ", 开始下载...");
 
             // 处理重定向
-            int code = conn.getResponseCode();
-            if (code == 301 || code == 302) {
+            if (code == 301 || code == 302 || code == 307) {
                 String newUrl = conn.getHeaderField("Location");
+                Log.d(TAG, "重定向到: " + newUrl);
+                notifyStatus("跟随重定向...");
                 conn.disconnect();
                 conn = (HttpURLConnection) new URL(newUrl).openConnection();
                 conn.setConnectTimeout(30000);
-                conn.setReadTimeout(60000);
-                conn.setRequestProperty("User-Agent", "DSH-Mobile/1.0");
+                conn.setReadTimeout(120000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36");
+                code = conn.getResponseCode();
+            }
+
+            if (code != 200) {
+                throw new IOException("HTTP 错误: " + code);
             }
 
             long totalSize = conn.getContentLength();
+            Log.d(TAG, "文件大小: " + (totalSize > 0 ? (totalSize / 1024 / 1024) + "MB" : "未知"));
+            notifyStatus("文件大小: " + (totalSize > 0 ? String.format("%.1fMB", totalSize / 1048576.0) : "未知"));
+
             is = conn.getInputStream();
             os = new FileOutputStream(dest);
 
-            byte[] buffer = new byte[8192];
+            byte[] buffer = new byte[16384]; // 16KB 缓冲
             int len;
             long downloaded = 0;
-            int lastProgress = 0;
+            long lastLogTime = System.currentTimeMillis();
 
             while ((len = is.read(buffer)) > 0) {
                 if (cancelled) throw new IOException("下载已取消");
@@ -218,17 +260,26 @@ public class EnvironmentDownloader {
                 os.write(buffer, 0, len);
                 downloaded += len;
 
-                // 每 5% 报告一次进度
-                if (totalSize > 0) {
-                    int progress = (int) (downloaded * 100 / totalSize);
-                    if (progress - lastProgress >= 5) {
-                        lastProgress = progress;
-                        notifyProgress(downloaded, totalSize);
+                // 每 2 秒输出一次日志
+                long now = System.currentTimeMillis();
+                if (now - lastLogTime > 2000) {
+                    lastLogTime = now;
+                    if (totalSize > 0) {
+                        int pct = (int) (downloaded * 100 / totalSize);
+                        String msg = String.format("下载中: %d%% (%.1fMB / %.1fMB)",
+                            pct, downloaded / 1048576.0, totalSize / 1048576.0);
+                        notifyStatus(msg);
+                        Log.d(TAG, msg);
+                    } else {
+                        String msg = String.format("下载中: %.1fMB", downloaded / 1048576.0);
+                        notifyStatus(msg);
+                        Log.d(TAG, msg);
                     }
                 }
             }
 
             os.flush();
+            Log.d(TAG, "下载完成: " + downloaded + " bytes");
 
         } finally {
             if (os != null) try { os.close(); } catch (Exception ignored) {}
