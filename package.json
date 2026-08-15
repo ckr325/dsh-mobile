@@ -1,0 +1,22 @@
+{
+  "name": "dsh-mobile",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness - Mobile Android App",
+  "main": "index.js",
+  "scripts": {
+    "build": "node build.js",
+    "cap:init": "npx cap init dsh-mobile com.deepseek.dsh.mobile --web-dir www",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/cli": "^6.0.0"
+  },
+  "devDependencies": {},
+  "keywords": ["deepseek", "harness", "android", "mobile"],
+  "author": "DSH Mobile",
+  "license": "MIT"
+}
