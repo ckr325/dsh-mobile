@@ -271,14 +271,18 @@ public class ProotRuntime {
         String script =
             "set -e\n" +
             "export DEBIAN_FRONTEND=noninteractive\n" +
-            "echo '[1/4] 更新软件源...'\n" +
-            "apt-get update -y 2>&1 | tail -1\n" +
-            "echo '[2/4] 安装 Node.js 和 npm...'\n" +
-            "apt-get install -y nodejs npm curl 2>&1 | tail -3\n" +
-            "echo '[3/4] 验证安装...'\n" +
+            "echo '[1/5] 配置 DNS...'\n" +
+            "echo 'nameserver 8.8.8.8' > /etc/resolv.conf\n" +
+            "echo 'nameserver 8.8.4.4' >> /etc/resolv.conf\n" +
+            "echo '[2/5] 更新软件源...'\n" +
+            "apt-get update -y 2>&1 | tail -3\n" +
+            "echo '[3/5] 安装基础工具...'\n" +
+            "apt-get install -y curl wget ca-certificates 2>&1 | tail -3\n" +
+            "echo '[4/5] 安装 Node.js...'\n" +
+            "apt-get install -y nodejs npm 2>&1 | tail -3\n" +
+            "echo '[5/5] 验证安装...'\n" +
             "node --version\n" +
             "npm --version\n" +
-            "echo '[4/4] 配置 npm...'\n" +
             "npm config set unsafe-perm true\n" +
             "echo '===NODE_INSTALLED==='\n";
 
@@ -292,8 +296,11 @@ public class ProotRuntime {
     public void deployServer() throws IOException {
         log("部署 DSH 服务器...");
 
-        // 先创建目录
-        exec("mkdir -p /root/dsh-server");
+        // 确保 DNS 可用
+        exec("echo 'nameserver 8.8.8.8' > /etc/resolv.conf");
+
+        // 创建目录
+        exec("mkdir -p /root/dsh-server /tmp");
 
         // 从 Android assets 复制文件到 rootfs 中
         File serverDir = new File(rootfsDir, "root/dsh-server");
