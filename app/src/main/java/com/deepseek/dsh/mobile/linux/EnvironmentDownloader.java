@@ -109,9 +109,22 @@ public class EnvironmentDownloader {
 
         downloadFile(url, prootFile);
 
-        // 设置可执行权限
-        Runtime.getRuntime().exec("chmod 755 " + prootFile.getAbsolutePath());
+        // 设置可执行权限（同步等待完成）
+        try {
+            Process chmod = Runtime.getRuntime().exec(new String[]{"chmod", "755", prootFile.getAbsolutePath()});
+            chmod.waitFor();
+            Log.d(TAG, "chmod 退出码: " + chmod.exitValue());
+        } catch (Exception e) {
+            Log.e(TAG, "chmod 失败", e);
+        }
+
+        // 双重保障
         prootFile.setExecutable(true, false);
+        prootFile.setReadable(true, false);
+
+        // 验证权限
+        Log.d(TAG, "proot 可执行: " + prootFile.canExecute());
+        Log.d(TAG, "proot 大小: " + prootFile.length());
 
         notifyStatus("proot 下载完成 ✓");
         return prootFile;
