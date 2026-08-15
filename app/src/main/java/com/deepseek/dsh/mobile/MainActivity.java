@@ -1,7 +1,6 @@
 package com.deepseek.dsh.mobile;
 
 import android.annotation.SuppressLint;
-import android.content.Intent;
 import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
@@ -25,41 +24,48 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import com.deepseek.dsh.mobile.linux.EnvironmentDownloader;
+import com.deepseek.dsh.mobile.linux.ProotRuntime;
+import com.deepseek.dsh.mobile.linux.SetupManager;
+
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
+/**
+ * DeepSeek Harness 手机版
+ *
+ * 基于 proot Ubuntu 的完全自包含方案
+ * 不需要 root，不需要 Termux
+ */
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "DSH";
     private static final String DSH_URL = "http://localhost:3080";
-    private static final int RETRY_DELAY_MS = 3000;
-    private static final int MAX_RETRIES = 60; // 最多等 3 分钟
+    private static final int RETRY_DELAY_MS = 2000;
+    private static final int MAX_RETRIES = 90; // 最多等 3 分钟
 
+    // UI
     private WebView webView;
     private ProgressBar progressBar;
     private View loadingView;
     private TextView statusText;
     private Button actionButton;
 
-    // 步骤指示器
+    // 步骤指示
     private View stepIndicator;
-    private TextView step1, step2, step3, step4;
+    private TextView step1, step2, step3, step4, step5;
 
     // 日志
     private ScrollView logScrollView;
     private TextView logText;
     private StringBuilder logBuffer = new StringBuilder();
 
-    private TermuxSetup termuxSetup;
+    // 核心
+    private SetupManager setupManager;
+    private EnvironmentDownloader downloader;
     private Handler handler;
     private int retryCount = 0;
-    private boolean isServerStarting = false;
     private final SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
 
     @Override
@@ -77,13 +83,12 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         handler = new Handler(Looper.getMainLooper());
-        termuxSetup = new TermuxSetup(this);
+        setupManager = new SetupManager(this);
+        downloader = new EnvironmentDownloader(this);
 
         initViews();
         setupWebView();
-
-        // 开始启动流程
-        startSetupFlow();
+        startFlow();
     }
 
     private void initViews() {
@@ -98,364 +103,269 @@ public class MainActivity extends AppCompatActivity {
         step2 = findViewById(R.id.step2);
         step3 = findViewById(R.id.step3);
         step4 = findViewById(R.id.step4);
+        step5 = findViewById(R.id.step5);
 
         logScrollView = findViewById(R.id.logScrollView);
         logText = findViewById(R.id.logText);
 
-        actionButton.setOnClickListener(v -> startSetupFlow());
+        actionButton.setOnClickListener(v -> startFlow());
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private void setupWebView() {
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
-        settings.setUseWideViewPort(true);
-        settings.setLoadWithOverviewMode(true);
-        settings.setSupportZoom(true);
-        settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        WebSettings s = webView.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        s.setAllowFileAccess(true);
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
+        s.setSupportZoom(true);
+        s.setBuiltInZoomControls(true);
+        s.setDisplayZoomControls(false);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
         webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageStarted(WebView view, String url, Bitmap favicon) {
-                super.onPageStarted(view, url, favicon);
+            @Override public void onPageStarted(WebView v, String url, Bitmap f) {
                 progressBar.setVisibility(View.VISIBLE);
             }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
+            @Override public void onPageFinished(WebView v, String url) {
                 progressBar.setVisibility(View.GONE);
-                showWebView();
+                loadingView.setVisibility(View.GONE);
+                webView.setVisibility(View.VISIBLE);
             }
-
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                super.onReceivedError(view, request, error);
-                if (request.isForMainFrame()) {
-                    appendLog("页面加载失败: " + error.getDescription());
-                }
+            @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
+                if (r.isForMainFrame()) appendLog("页面加载失败");
             }
         });
 
         webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onProgressChanged(WebView view, int newProgress) {
-                progressBar.setProgress(newProgress);
-                if (newProgress == 100) progressBar.setVisibility(View.GONE);
+            @Override public void onProgressChanged(WebView v, int p) {
+                progressBar.setProgress(p);
+                if (p == 100) progressBar.setVisibility(View.GONE);
             }
         });
     }
 
-    // ===================== 启动流程 =====================
+    // ===================== 主流程 =====================
 
-    private void startSetupFlow() {
+    private void startFlow() {
         retryCount = 0;
-        isServerStarting = false;
         actionButton.setVisibility(View.GONE);
         logBuffer.setLength(0);
         logText.setText("");
-
         stepIndicator.setVisibility(View.VISIBLE);
         logScrollView.setVisibility(View.VISIBLE);
-
         resetSteps();
+
         appendLog("=== DSH Mobile 启动 ===");
+        appendLog("架构: " + Build.SUPPORTED_ABIS[0]);
 
-        checkTermux();
-    }
-
-    /**
-     * 步骤 1：检查 Termux
-     */
-    private void checkTermux() {
-        updateStep(step1, "⏳", "检查 Termux 运行环境...");
-        updateStatus("正在检查运行环境...");
-        appendLog("检查 Termux 是否已安装...");
-
-        if (!termuxSetup.isTermuxInstalled()) {
-            updateStep(step1, "❌", "Termux 未安装");
-            appendLog("Termux 未安装，需要用户手动安装");
-            showInstallTermuxButton();
-            return;
-        }
-
-        updateStep(step1, "✅", "Termux 已安装");
-        appendLog("Termux 已安装 ✓");
-
-        // 继续下一步
-        checkNode();
-    }
-
-    /**
-     * 步骤 2：检查 Node.js
-     */
-    private void checkNode() {
-        updateStep(step2, "⏳", "检查 Node.js...");
-        updateStatus("正在检查 Node.js...");
-        appendLog("检查 Node.js 是否可用...");
-
-        if (!termuxSetup.isNodeInstalled()) {
-            updateStep(step2, "⬇️", "首次运行，需要安装 Node.js");
-            appendLog("Node.js 未安装，启动 Termux 安装...");
-            installNode();
-            return;
-        }
-
-        updateStep(step2, "✅", "Node.js 已安装");
-        appendLog("Node.js 已安装 ✓");
-        prepareAndStart();
-    }
-
-    /**
-     * 步骤 2 执行：安装 Node.js
-     */
-    private void installNode() {
-        try {
-            // 准备服务器文件到外部存储（Termux 可访问）
-            updateStatus("正在准备服务器文件...");
-            appendLog("复制 DSH 服务器文件...");
-            copyServerToTermux();
-            appendLog("服务器文件准备完成 ✓");
-
-            // 构建 Termux 命令
-            String extPath = getExternalFilesDir(null) + "/dsh-server";
-            String cmd = String.format(
-                "echo '[DSH] 开始安装环境...' && " +
-                "pkg update -y && " +
-                "echo '[DSH] 安装 Node.js...' && " +
-                "pkg install -y nodejs && " +
-                "echo '[DSH] Node.js 版本:' && node --version && " +
-                "mkdir -p ~/dsh-server && " +
-                "cp %s/* ~/dsh-server/ && " +
-                "echo '[DSH] 安装依赖...' && " +
-                "cd ~/dsh-server && npm install --production && " +
-                "echo '[DSH] ===SETUP_COMPLETE==='",
-                extPath
-            );
-
-            appendLog("启动 Termux 执行安装命令...");
-            appendLog("（请在 Termux 中等待安装完成）");
-            updateStatus("正在 Termux 中安装 Node.js，请稍候...");
-
-            Intent intent = termuxSetup.getTermuxCommandIntent(cmd);
-            startService(intent);
-
-            // 标记已安装（避免重复安装）
-            termuxSetup.markNodeInstalled();
-
-            // 等待足够时间让安装完成（首次安装 Node.js 约 2-5 分钟）
-            appendLog("等待 Node.js 安装完成（约2-5分钟）...");
-            updateStep(step2, "⚙️", "Node.js 安装中（请查看 Termux）...");
-
-            // 定时检查
-            handler.postDelayed(() -> {
-                appendLog("尝试启动服务器...");
-                prepareAndStart();
-            }, 30000); // 30 秒后尝试
-
-        } catch (Exception e) {
-            appendLog("安装失败: " + e.getMessage());
-            updateStep(step2, "❌", "安装失败");
-            showError("安装失败: " + e.getMessage());
+        if (setupManager.isReady()) {
+            // 已经装好，直接启动服务器
+            appendLog("环境已就绪，直接启动服务器");
+            startServer();
+        } else {
+            // 需要完整安装
+            runSetup();
         }
     }
 
     /**
-     * 步骤 3 + 4：准备文件并启动服务器
+     * 完整安装流程
      */
-    private void prepareAndStart() {
-        // 准备文件
-        updateStep(step3, "⏳", "准备服务器文件...");
-        updateStatus("准备服务器文件...");
-        appendLog("准备 DSH 服务器文件...");
+    private void runSetup() {
+        setupManager.setCallback(new SetupManager.SetupCallback() {
+            @Override
+            public void onStepChanged(int step, String title, String detail) {
+                updateStatus(detail);
+                switch (step) {
+                    case 1: updateStep(step1, "⏳", title); break;
+                    case 2: updateStep(step2, "⏳", title); break;
+                    case 3: updateStep(step3, "⏳", title); break;
+                    case 4: updateStep(step4, "⏳", title); break;
+                    case 5: updateStep(step5, "⏳", title); break;
+                }
+                // 标记之前的步骤为完成
+                if (step > 1) updateStep(step1, "✅", getStepText(step1));
+                if (step > 2) updateStep(step2, "✅", getStepText(step2));
+                if (step > 3) updateStep(step3, "✅", getStepText(step3));
+                if (step > 4) updateStep(step4, "✅", getStepText(step4));
+            }
 
-        try {
-            termuxSetup.prepareScripts();
-            termuxSetup.copyServerFiles();
-            copyServerToTermux();
-            updateStep(step3, "✅", "服务器文件就绪");
-            appendLog("服务器文件准备完成 ✓");
-        } catch (IOException e) {
-            updateStep(step3, "❌", "文件准备失败");
-            appendLog("文件准备失败: " + e.getMessage());
-            showError("文件准备失败: " + e.getMessage());
-            return;
-        }
+            @Override
+            public void onLog(String message) {
+                appendLog(message);
+            }
 
-        // 启动服务器
-        startDSHServer();
-    }
+            @Override
+            public void onProgress(int percent) {
+                progressBar.setProgress(percent);
+            }
 
-    /**
-     * 步骤 4：启动 DSH 服务器
-     */
-    private void startDSHServer() {
-        if (isServerStarting) return;
-        isServerStarting = true;
-
-        updateStep(step4, "⏳", "启动 DSH 服务器...");
-        updateStatus("正在启动 DSH 服务器...");
-        appendLog("通过 Termux 启动 DSH 服务器...");
-
-        try {
-            String cmd = "cd ~/dsh-server && node index.js &";
-            Intent intent = termuxSetup.getTermuxCommandIntent(cmd);
-            startService(intent);
-
-            appendLog("启动命令已发送，等待服务就绪...");
-            appendLog("检测端口 localhost:3080 ...");
-
-            // 等 5 秒后开始检测
-            handler.postDelayed(() -> waitForServer(), 5000);
-
-        } catch (Exception e) {
-            isServerStarting = false;
-            appendLog("启动失败: " + e.getMessage());
-            updateStep(step4, "❌", "启动失败");
-            showError("启动服务器失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 等待服务器就绪
-     */
-    private void waitForServer() {
-        if (retryCount >= MAX_RETRIES) {
-            isServerStarting = false;
-            appendLog("等待超时！服务器未能在端口 3080 上启动");
-            appendLog("可能原因：");
-            appendLog("  1. Termux 中 Node.js 未安装完成");
-            appendLog("  2. DSH 服务器启动报错");
-            appendLog("  3. 端口 3080 被占用");
-            appendLog("请打开 Termux 查看日志，或点击重试");
-            updateStep(step4, "❌", "启动超时");
-            showError("服务器启动超时，请检查 Termux 中的输出日志");
-            return;
-        }
-
-        retryCount++;
-        updateStatus(String.format("等待服务就绪... (%d/%d)", retryCount, MAX_RETRIES));
-
-        if (retryCount % 5 == 0) {
-            appendLog(String.format("等待中... 第 %d 次尝试 (%ds)", retryCount, retryCount * 3));
-        }
-
-        handler.postDelayed(() -> {
-            if (isServerRunning()) {
-                appendLog("✅ 端口 3080 已就绪！");
-                updateStep(step4, "✅", "DSH 服务器运行中");
-                isServerStarting = false;
-                loadDSH();
-            } else {
+            @Override
+            public void onSuccess() {
+                updateStep(step5, "✅", "DSH 服务器运行中");
+                appendLog("✅ 安装完成！服务器已启动");
+                // 开始等待服务器就绪
                 waitForServer();
             }
-        }, RETRY_DELAY_MS);
+
+            @Override
+            public void onError(String error) {
+                appendLog("❌ 错误: " + error);
+                showError("安装失败: " + error);
+            }
+        });
+
+        // 先下载 proot 和 rootfs，然后执行安装
+        new Thread(() -> {
+            try {
+                // 下载 proot
+                updateStep(step1, "⬇️", "下载 PRoot 运行时...");
+                updateStatus("正在下载 PRoot...");
+                downloader.setCallback(new EnvironmentDownloader.DownloadCallback() {
+                    @Override public void onStatusUpdate(String s) { appendLog(s); }
+                    @Override public void onProgress(long d, long t) {
+                        int pct = t > 0 ? (int)(d * 100 / t) : 0;
+                        appendLog(String.format("  下载进度: %d%% (%.1fMB/%.1fMB)", pct, d/1048576.0, t/1048576.0));
+                    }
+                    @Override public void onComplete() {}
+                    @Override public void onError(String e) { appendLog("下载错误: " + e); }
+                });
+
+                downloader.downloadProot();
+                updateStep(step1, "✅", "PRoot 就绪");
+                appendLog("PRoot 准备完成 ✓");
+
+                // 下载 Ubuntu rootfs
+                updateStep(step2, "⬇️", "下载 Ubuntu 系统...");
+                updateStatus("正在下载 Ubuntu（约30MB）...");
+                downloader.downloadRootfs();
+                updateStep(step2, "✅", "Ubuntu 已安装");
+                appendLog("Ubuntu rootfs 安装完成 ✓");
+
+                // 继续执行安装（Node.js + DSH）
+                handler.post(() -> setupManager.runFullSetup());
+
+            } catch (Exception e) {
+                Log.e(TAG, "下载失败", e);
+                handler.post(() -> showError("下载失败: " + e.getMessage()));
+            }
+        }).start();
     }
 
-    // ===================== 辅助方法 =====================
+    /**
+     * 已安装的情况，仅启动服务器
+     */
+    private void startServer() {
+        updateStep(step5, "⏳", "启动 DSH 服务器...");
+        updateStatus("正在启动服务器...");
+        appendLog("启动 DSH 服务器...");
 
-    private boolean isServerRunning() {
+        setupManager.setCallback(new SetupManager.SetupCallback() {
+            @Override public void onStepChanged(int s, String t, String d) { updateStatus(d); }
+            @Override public void onLog(String m) { appendLog(m); }
+            @Override public void onProgress(int p) { progressBar.setProgress(p); }
+            @Override public void onSuccess() {
+                updateStep(step5, "✅", "DSH 服务器运行中");
+                appendLog("✅ 服务器已启动");
+                waitForServer();
+            }
+            @Override public void onError(String e) {
+                appendLog("❌ " + e);
+                showError("启动失败: " + e);
+            }
+        });
+
+        setupManager.startServerOnly();
+    }
+
+    /**
+     * 等待服务器端口就绪
+     */
+    private void waitForServer() {
+        appendLog("检测端口 localhost:3080 ...");
+
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (isPortOpen()) {
+                    appendLog("✅ 端口 3080 就绪！");
+                    appendLog("加载 DSH 界面...");
+                    webView.loadUrl(DSH_URL);
+                    return;
+                }
+
+                retryCount++;
+                if (retryCount >= MAX_RETRIES) {
+                    appendLog("⚠️ 超时，请检查服务器日志");
+                    showError("服务器启动超时，请查看日志排查");
+                    return;
+                }
+
+                if (retryCount % 10 == 0) {
+                    appendLog("等待中... (" + retryCount + "/" + MAX_RETRIES + ")");
+                }
+
+                handler.postDelayed(this, RETRY_DELAY_MS);
+            }
+        }, 3000);
+    }
+
+    private boolean isPortOpen() {
         try {
-            java.net.Socket socket = new java.net.Socket();
-            socket.connect(new java.net.InetSocketAddress("localhost", 3080), 2000);
-            socket.close();
+            java.net.Socket s = new java.net.Socket();
+            s.connect(new java.net.InetSocketAddress("localhost", 3080), 2000);
+            s.close();
             return true;
         } catch (Exception e) {
             return false;
         }
     }
 
-    private void loadDSH() {
-        updateStatus("正在加载界面...");
-        appendLog("加载 WebView 界面...");
-        webView.loadUrl(DSH_URL);
-    }
-
-    private void showWebView() {
-        loadingView.setVisibility(View.GONE);
-        webView.setVisibility(View.VISIBLE);
-        appendLog("✅ 界面加载完成！");
-    }
-
-    /**
-     * 复制服务器文件到 Termux 可访问的位置
-     */
-    private void copyServerToTermux() throws IOException {
-        File extDir = new File(getExternalFilesDir(null), "dsh-server");
-        if (!extDir.exists()) extDir.mkdirs();
-
-        String[] assetFiles = {"nodejs-project/index.js", "nodejs-project/package.json"};
-        for (String asset : assetFiles) {
-            String fileName = new File(asset).getName();
-            File dest = new File(extDir, fileName);
-            if (!dest.exists()) {
-                InputStream is = getAssets().open(asset);
-                OutputStream os = new FileOutputStream(dest);
-                byte[] buf = new byte[4096];
-                int len;
-                while ((len = is.read(buf)) > 0) os.write(buf, 0, len);
-                os.flush();
-                os.close();
-                is.close();
-                appendLog("  已复制: " + fileName);
-            }
-        }
-    }
-
     // ===================== UI 辅助 =====================
 
-    private void showInstallTermuxButton() {
-        actionButton.setText("📦 安装 Termux");
-        actionButton.setVisibility(View.VISIBLE);
-        actionButton.setOnClickListener(v -> {
-            termuxSetup.openTermuxInstall(this);
-            appendLog("已跳转到 Termux 安装页面...");
-            updateStatus("请完成 Termux 安装后返回");
-            actionButton.setText("✅ 已安装，继续");
-            actionButton.setOnClickListener(v2 -> startSetupFlow());
-        });
-    }
-
-    private void showError(String message) {
-        statusText.setText(message);
+    private void showError(String msg) {
+        statusText.setText(msg);
         statusText.setTextColor(ContextCompat.getColor(this, R.color.error));
         actionButton.setText("🔄 重试");
         actionButton.setVisibility(View.VISIBLE);
         progressBar.setVisibility(View.GONE);
     }
 
-    private void updateStatus(String message) {
-        statusText.setText(message);
+    private void updateStatus(String msg) {
+        statusText.setText(msg);
         statusText.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
     }
 
     private void resetSteps() {
-        step1.setText("○ 检查运行环境");
-        step1.setTextColor(ContextCompat.getColor(this, R.color.text_hint));
-        step2.setText("○ 安装 Node.js");
-        step2.setTextColor(ContextCompat.getColor(this, R.color.text_hint));
-        step3.setText("○ 准备服务器文件");
-        step3.setTextColor(ContextCompat.getColor(this, R.color.text_hint));
-        step4.setText("○ 启动 DSH 服务器");
-        step4.setTextColor(ContextCompat.getColor(this, R.color.text_hint));
+        TextView[] steps = {step1, step2, step3, step4, step5};
+        String[] labels = {"初始化 PRoot", "安装 Ubuntu", "安装 Node.js", "部署服务器", "启动服务"};
+        for (int i = 0; i < steps.length; i++) {
+            steps[i].setText("○ " + labels[i]);
+            steps[i].setTextColor(ContextCompat.getColor(this, R.color.text_hint));
+        }
     }
 
-    private void updateStep(TextView stepView, String icon, String text) {
-        stepView.setText(icon + " " + text);
-        if (icon.equals("✅")) {
-            stepView.setTextColor(ContextCompat.getColor(this, R.color.success));
-        } else if (icon.equals("❌")) {
-            stepView.setTextColor(ContextCompat.getColor(this, R.color.error));
+    private void updateStep(TextView v, String icon, String text) {
+        // 只更新 icon 部分，保留步骤名
+        String current = v.getText().toString();
+        String label = current.contains(" ") ? current.substring(current.indexOf(" ")) : text;
+        v.setText(icon + " " + text);
+        if ("✅".equals(icon)) {
+            v.setTextColor(ContextCompat.getColor(this, R.color.success));
+        } else if ("❌".equals(icon)) {
+            v.setTextColor(ContextCompat.getColor(this, R.color.error));
         } else {
-            stepView.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+            v.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
         }
+    }
+
+    private String getStepText(TextView v) {
+        String t = v.getText().toString();
+        return t.contains(" ") ? t.substring(t.indexOf(" ") + 1) : "";
     }
 
     private void appendLog(String msg) {
@@ -469,26 +379,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        if (termuxSetup.isTermuxInstalled() && !isServerStarting && webView.getVisibility() != View.VISIBLE) {
-            appendLog("从 Termux 返回，重新检查...");
-            startSetupFlow();
-        }
-    }
-
-    @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+        if (webView.canGoBack()) webView.goBack();
+        else super.onBackPressed();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         if (webView != null) webView.destroy();
+        if (setupManager != null) setupManager.stopServer();
+        if (downloader != null) downloader.cancel();
     }
 }
