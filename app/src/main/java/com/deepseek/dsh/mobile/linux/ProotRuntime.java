@@ -229,8 +229,10 @@ public class ProotRuntime {
         // 绑定 /dev, /proc, /sys 等
         cmd.add("--bind=/dev");
         cmd.add("--bind=/dev/urandom:/dev/random");
+        cmd.add("--bind=/dev/pts");
         cmd.add("--bind=/proc");
         cmd.add("--bind=/sys");
+        cmd.add("--bind=/sdcard");
 
         // 绑定 Android 的 tmp 目录
         File tmpDir = new File(context.getCacheDir(), "proot-tmp");
