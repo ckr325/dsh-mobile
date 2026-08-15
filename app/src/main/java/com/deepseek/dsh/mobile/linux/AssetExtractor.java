@@ -88,8 +88,10 @@ public class AssetExtractor {
             is.close();
 
             // 设置权限
-            Process chmod = Runtime.getRuntime().exec(new String[]{"chmod", "755", prootFile.getAbsolutePath()});
-            chmod.waitFor();
+            try {
+                Process chmod = Runtime.getRuntime().exec(new String[]{"chmod", "755", prootFile.getAbsolutePath()});
+                chmod.waitFor();
+            } catch (InterruptedException ignored) {}
 
             prootFile.setExecutable(true, false);
             prootFile.setReadable(true, false);
