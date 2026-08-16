@@ -126,6 +126,9 @@ public class AssetExtractor {
             while ((len = is.read(buf)) > 0) {
                 os.write(buf, 0, len);
                 total += len;
+                if (total % (1024 * 1024) == 0) {
+                    notifyStatus("复制中: " + (total / 1024 / 1024) + "MB...");
+                }
             }
             os.flush();
             os.close();
@@ -135,7 +138,8 @@ public class AssetExtractor {
             notifyStatus("tar 文件就绪，开始解压...");
 
         } catch (IOException e) {
-            throw new IOException("读取 rootfs assets 失败: " + e.getMessage(), e);
+            throw new IOException("读取 rootfs assets 失败: " + e.getMessage() + 
+                "\n\n可能原因：APK 构建时 rootfs 未正确打包。请重新构建 APK。", e);
         }
 
         // 解压
